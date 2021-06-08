@@ -67,6 +67,47 @@ def Pairwise_Loss_F(useremb, queryemb, product_pos, product_neg, k):
     batch_loss = tf.reduce_mean(batch_loss)
     return batch_loss, tf.reduce_mean(dis_pos), tf.reduce_mean(dis_neg)
 
+def Inner_product(useremb, queryemb, product_pos, product_neg, k):
+    # u_plus_q = user+query
+    u_plus_q = useremb + queryemb
+    
+    #uq=u_plus_q.unsqueeze(2)  # skip
+    #itp = item_pos.unsqueeze(1) # skip
+    #pos_skip = torch.bmm(itp, uq) # skip
+    #transpose_product_pos = tf.transpose(product_pos)
+
+    #dis_pos = tf.matmul(u_plus_q, product_pos, transpose_b=True)
+    dis_pos = tf.reduce_sum(tf.multiply(u_plus_q, product_pos), axis=1) 
+    #dis_pos = -1.0 * tf.matmul(u_plus_q, product_pos, transpose_b=True)
+    #dis_pos = tf.multiply(u_plus_q, product_pos)
+    #loss_pos = pos_skip.sigmoid().log().mean()
+    loss_pos = tf.reduce_mean(tf.math.log(tf.sigmoid(dis_pos)))
+    #dis_pos = tf.reshape(dis_pos, [-1, 1])
+    
+    #itn = items_neg.unsqueeze(2) # skip
+    #batch_size, neg_num, em_dim = items_neg.shape
+        #neg_skip = torch.empty(batch_size, neg_num, 1)
+    #for i in range(self.batch_size):
+        #neg_skip[i] = torch.matmul(itn[i],uq[i]).squeeze(2)
+    expand_u_plus_q = tf.tile(tf.expand_dims(u_plus_q, axis=1),[1,k,1])
+    #transpose_product_neg = tf.transpose(product_neg,perm=[0, 2, 1])
+    
+    #dis_neg = tf.matmul(expand_u_plus_q, transpose_product_neg)
+    dis_neg = tf.reduce_sum(tf.multiply(expand_u_plus_q, product_neg), axis=2) 
+    #dis_neg = tf.multiply(expand_u_plus_q, product_neg)
+    # loss_neg = neg_skip.mul(-1.0).sigmoid().log().sum(dim=1).mean()
+    loss_neg = tf.reduce_mean(tf.reduce_sum(tf.math.log(tf.sigmoid(tf.multiply(dis_neg, -1.0))),axis=1))
+    #loss_neg = tf.reduce_mean(tf.reduce_sum(tf.math.log(tf.sigmoid(dis_neg)),axis=1))
+    #dis_neg = tf.reshape(dis_neg, [-1, 1])
+    batch_loss = -1.0*(loss_pos + loss_neg)
+    
+    #return tf.reduce_mean(batch_loss), tf.reduce_mean(dis_pos), tf.reduce_mean(dis_neg)
+    return batch_loss, tf.reduce_mean(dis_pos), tf.reduce_mean(dis_neg)
+    
+    #loss_neg = neg_skip.mul(-1.0).sigmoid().log().sum(dim=1).mean()
+    #batch_loss = -1.0*(loss_pos + loss_neg)
+    #return batch_loss, pos_skip.mean(), neg_skip.mean()
+
 class PSAM(object):
     def __init__(self, Embed, params):
         self.UserID = tf.compat.v1.placeholder(tf.int32, shape=(None), name = 'uid')
@@ -208,16 +249,25 @@ class PSAM(object):
         user_long_short_emb_bias = tf.Variable(tf.random_normal([params.embed_size]))
         self.long_short_rate = tf.sigmoid(tf.matmul(self.long_term_useremb, user_long_emb_weights) + tf.matmul(self.short_term_useremb, user_short_emb_weights) + user_long_short_emb_bias)
 
-        self.useremb = self.long_term_useremb * self.long_short_rate + (1 - self.long_short_rate) * self.short_term_useremb
+        if params.user_emb == "Complete":
+            self.useremb = self.long_term_useremb * self.long_short_rate + (1 - self.long_short_rate) * self.short_term_useremb
+        elif params.user_emb == "Short_term":
+            self.useremb = self.short_term_useremb
+        elif params.user_emb == "Long_term":
+            self.useremb = self.long_term_useremb
+        else:
+            self.useremb = self.user_ID_emb
 
         # self.long_short_rate = tf.sigmoid(self.long_term_before_product_len - params.short_term_size)
         # 
         #self.useremb = self.short_term_useremb
 
-        if params.loss_f == "Pairwise":
-            self.opt_loss, self.pos_loss, self.neg_loss = Pairwise_Loss_F(self.useremb, self.queryemb, self.product_pos_emb, self.product_neg_emb, params.neg_sample_num)
-        else:
+        if params.loss_f == "Inner_product":
+            self.opt_loss, self.pos_loss, self.neg_loss = Inner_product(self.useremb, self.queryemb, self.product_pos_emb, self.product_neg_emb, params.neg_sample_num)
+        elif params.loss_f == "MetricLearning":
             self.opt_loss, self.pos_loss, self.neg_loss = Loss_F(self.useremb, self.queryemb, self.product_pos_emb, self.product_neg_emb, params.neg_sample_num)
+        else:
+            self.opt_loss, self.pos_loss, self.neg_loss = Pairwise_Loss_F(self.useremb, self.queryemb, self.product_pos_emb, self.product_neg_emb, params.neg_sample_num)
         reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         self.opt_loss = self.opt_loss + sum(reg_losses)
         

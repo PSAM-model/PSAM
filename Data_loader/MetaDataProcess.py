@@ -43,7 +43,7 @@ def get_query(x):
         finalQs.append( finalQ.strip())
     return finalQs
 
-# Record the maximum query length
+# 记录最大的query长度
 def GetMaxLength(querylist):
     q_lens = []
     for i in querylist:

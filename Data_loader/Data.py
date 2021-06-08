@@ -11,21 +11,21 @@ class DataSet(object):
     def __init__(self, UserData, metaData, neg_sample_num, max_query_len, max_review_len, max_product_len, savepath, short_term_size, long_term_size = None, weights=True):
         
         
-        # transform between entity(users, products and words) and id
+        # 用户,商品与词统一成v,v与id之间的转换
         self.id_2_v = dict()
         self.v_2_id = dict()
         
-        # transform between user and id
+        # 用户与id之间的转换
         self.id_2_user = dict()
         self.user_2_id = dict()
         
-        # transform between product and id
+        # 商品与id之间的转换
         self.id_2_product = dict()
         self.product_2_id = dict()
         
         self.product_2_query = dict()
         
-        # transform between word and id
+        # query的词都用id表示
         self.word_2_id = dict()
         self.id_2_word = dict()
         
@@ -34,7 +34,7 @@ class DataSet(object):
         self.userReviewsCounter = dict()
         self.userReviewsTest = dict()
         
-        # save previous information
+        # 保存之前的信息
         self.before_pid_pos = dict()
         self.before_textlist = dict()
         self.before_textlenlist = dict()
@@ -77,7 +77,7 @@ class DataSet(object):
             if w == '':
                 continue
             qids.append(self.word_2_id[w])
-            # count the item 
+            # 统计词频
             if weight_cal:
                 self.word_weight[self.word_2_id[w]-1] += 1
         for _ in range(len(qids), max_len):
@@ -93,21 +93,21 @@ class DataSet(object):
         vid += 1
         uid = 0
         for i in range(len(UserData)):
-            
+            # 每个用户都唯一而且购买长度大于等于10
             self.id_2_user[uid] = UserData[i].UserID
             self.user_2_id[UserData[i].UserID] = uid
             
             self.id_2_v[vid] = UserData[i].UserID
             self.v_2_id[UserData[i].UserID] = vid
             
-            # update the set of products
+            #更新产品集合
             asins = []
             reviewtexts = []
             for j in range(len(UserData[i].UserPurchaseList)):
                 asins.append(UserData[i].UserPurchaseList[j]['asin'])
                 reviewtexts.append(UserData[i].UserPurchaseList[j]['reviewText'])
             
-            # the purchasing record for user
+            # 每个用户的购买记录
             ProductSet.update(asins)
             self.userReviews[uid] = asins
             words.update(set(' '.join(reviewtexts).split()))
@@ -125,7 +125,7 @@ class DataSet(object):
         for p in ProductSet:
             try:
                 '''
-                check if this product has query
+                判断这个product是否有query
                 '''
                 if (len(metaData.loc[p]['query']) > 0):
                     self.product_2_query[p] = metaData.loc[p]['query']
@@ -163,7 +163,7 @@ class DataSet(object):
         self.wordNum = wi
         self.word_weight = np.zeros(wi)
 
-        # count the average puchasing record for users
+        # 统计用户平均购买记录
         User_product_len_list = []
         for U in range(len(UserData)):
             uid = self.user_2_id[UserData[U].UserID]
@@ -196,7 +196,7 @@ class DataSet(object):
             self.data_X = []
             for U in range(len(UserData)):
                 uid = self.user_2_id[UserData[U].UserID]
-                
+                # 每个User的数据，方便以后划分数据集
                 User_Data_X = []
                 
                 UserItemLen = len(UserData[U].UserPurchaseList)
@@ -212,7 +212,7 @@ class DataSet(object):
                 before_querylist_pos = []
                 before_querylist_pos_len = []
                 
-                # add forward 
+                # 向前补充short_term_size-1个信息
                 for k in range(0, short_term_size - 1):
                     before_pids_pos.append(self.product_2_id['<pad>'])
                     padding_review_text = ""
@@ -280,7 +280,7 @@ class DataSet(object):
                     try:
                         Q_text_array_pos = self.product_2_query[self.id_2_product[current_pid_pos]]
                     except:
-                        # product vi has no query and will be not add in the dataset
+                        # vi物品没有query，不加入数据集
                         Q_text_array_pos = []
                     for Qi in range(len(Q_text_array_pos)):
                         try:
@@ -315,7 +315,7 @@ class DataSet(object):
                 self.data_X.append(User_Data_X)
             
             '''
-            7:2:1
+            数据集划分-根据用户进行划分，划分比例为7:2:1
             '''
             for u in self.data_X:
                 u_len = len(u)
